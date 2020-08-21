@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "EnvironmentParameter",
+    "ParameterValue": "production"
+  },
+  {
+    "ParameterKey": "VpcBeginRange",
+    "ParameterValue": "10.20"
+  }
+]
