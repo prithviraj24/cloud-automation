@@ -1,0 +1,38 @@
+[
+  {
+    "ParameterKey": "EnvironmentParameter",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "VpcBeginRange",
+    "ParameterValue": "192.168"
+  },
+  {
+    "ParameterKey": "VpcCidrBlock",
+    "ParameterValue": "0.0/16"
+  },
+  {
+    "ParameterKey": "PublicSubnet1CidrBlock",
+    "ParameterValue": "1.0/24"
+  },
+  {
+    "ParameterKey": "PublicSubnet2CidrBlock",
+    "ParameterValue": "11.0/24"
+  },
+  {
+    "ParameterKey": "PrivateSubnet1CidrBlock",
+    "ParameterValue": "2.0/24"
+  },
+  {
+    "ParameterKey": "PrivateSubnet2CidrBlock",
+    "ParameterValue": "12.0/24"
+  },
+  {
+    "ParameterKey": "DBSubnet1CidrBlock",
+    "ParameterValue": "3.0/24"
+  },
+  {
+    "ParameterKey": "DBSubnet2CidrBlock",
+    "ParameterValue": "13.0/24"
+  }
+]

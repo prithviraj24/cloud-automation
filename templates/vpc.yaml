@@ -4,12 +4,10 @@ Parameters:
   EnvironmentParameter:
     Description: Select the type of environment to create.
     Type: String
-    AllowedValues:
-      - staging
-      - production
+    AllowedValues: [ staging, production ]
     Default: staging
   VpcBeginRange:
-    Description: The first 2 octets of the VPC network range.
+    Description: The first 2 octets of the VPC network range, e.g. 192.168
     Type: String
     AllowedPattern: '(\d{1,3})\.(\d{1,3})'
     Default: '10.10'
@@ -49,10 +47,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref 'AWS::StackName'
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref VpcCidrBlock
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref VpcCidrBlock ] ]
       InstanceTenancy: default
       EnableDnsSupport: 'true'
       EnableDnsHostnames: 'true'
@@ -73,17 +68,12 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - igw
+          Value: !Join [ '-', [ !Ref AWS::StackName, igw ] ]
   ngw:
     Type: 'AWS::EC2::NatGateway'
     DependsOn: gatewayattachment
     Properties:
-      AllocationId: !GetAtt
-        - ngwEIP
-        - AllocationId
+      AllocationId: !GetAtt [ ngwEIP, AllocationId ]
       SubnetId: !Ref publicsubnet1
   ngwEIP:
     Type: 'AWS::EC2::EIP'
@@ -100,6 +90,12 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       RouteTableId: !Ref privateroutetable
       NatGatewayId: !Ref ngw
+  dbroutengw:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref dbroutetable
+      NatGatewayId: !Ref ngw
   publicrouteigw:
     Type: 'AWS::EC2::Route'
     Properties:
@@ -110,122 +106,56 @@ Resources:
   publicsubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '0'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - public
-              - !Select
-                - '0'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref PublicSubnet1CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, Public Subnet, !Select [ 0, !GetAZs '' ] ] ]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref PublicSubnet1CidrBlock ] ]
       VpcId: !Ref vpc
   publicsubnet2:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '1'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - public
-              - !Select
-                - '1'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref PublicSubnet2CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, Public Subnet, !Select [ 1, !GetAZs '' ] ] ]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref PublicSubnet2CidrBlock ] ]
       VpcId: !Ref vpc
   privatesubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '0'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - private
-              - !Select
-                - '0'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref PrivateSubnet1CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, Private Subnet, !Select [ 0, !GetAZs '' ] ] ]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref PrivateSubnet1CidrBlock ] ]
       VpcId: !Ref vpc
   privatesubnet2:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '1'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - private
-              - !Select
-                - '1'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref PrivateSubnet2CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, Private Subnet, !Select [ 1, !GetAZs '' ] ] ]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref PrivateSubnet2CidrBlock ] ]
       VpcId: !Ref vpc
   dbsubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '0'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - db-private
-              - !Select
-                - '0'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref DBSubnet1CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, DB Subnet, !Select [ 0, !GetAZs '' ] ] ]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref DBSubnet1CidrBlock ] ]
       VpcId: !Ref vpc
   dbsubnet2:
     Type: 'AWS::EC2::Subnet'
     Properties:
-      AvailabilityZone: !Select
-        - '1'
-        - !GetAZs ''
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - db-private
-              - !Select
-                - '2'
-                - !GetAZs ''
-      CidrBlock: !Join
-        - .
-        - - !Ref VpcBeginRange
-          - !Ref DBSubnet2CidrBlock
+          Value: !Join [ '-', [ !Ref AWS::StackName, DB Subnet, !Select [ 1, !GetAZs '' ] ]]
+      CidrBlock: !Join [ '.', [ !Ref VpcBeginRange, !Ref DBSubnet2CidrBlock ] ]
       VpcId: !Ref vpc
   dbsubnet1routetable:
     Type: 'AWS::EC2::SubnetRouteTableAssociation'
@@ -262,17 +192,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Join
-            - '-'
-            - - !Ref 'AWS::StackName'
-              - dbsubnetgroup
-      DBSubnetGroupDescription: !Join
-        - '-'
-        - - !Ref 'AWS::StackName'
-          - dbsubnetgroup
-      SubnetIds:
-        - !Ref dbsubnet1
-        - !Ref dbsubnet2
+          Value: !Join [ '-', [ !Ref AWS::StackName, dbsubnetgroup ] ]
+      DBSubnetGroupDescription: !Join [ '-', [ !Ref AWS::StackName, dbsubnetgroup ] ]
+      SubnetIds: [ !Ref dbsubnet1, !Ref dbsubnet2 ]
 Outputs:
   vpcoutput:
     Description: The VPC ID
