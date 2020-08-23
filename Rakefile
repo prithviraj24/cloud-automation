@@ -63,7 +63,7 @@ TEMPLATE_NAMES.each do |template_name|
   namespace template_name do
     desc "Validate the #{template_name} template"
     task :validate do
-      cloudformation = Aws::CloudFormation::Client.new(region: ENV['AWS_REGION'] || 'us-east-1')
+      cloudformation = Aws::CloudFormation::Client.new
       cloudformation.validate_template(template_body: template_body)
     end
   end
@@ -73,7 +73,7 @@ TEMPLATE_NAMES.each do |template_name|
       desc "To Create/Update the #{stack_name} stack with the #{template_name} template"
       task :update => "#{template_name}:validate" do
         # create cfn client
-        cloudformation = Aws::CloudFormation::Client.new(region: ENV['AWS_REGION'] || 'us-east-1')
+        cloudformation = Aws::CloudFormation::Client.new
         # find stack asked by user
         stack = cloudformation.list_stacks.stack_summaries.find {|stack| stack.stack_name == stack_name}
 
