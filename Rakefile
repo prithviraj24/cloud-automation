@@ -77,7 +77,11 @@ TEMPLATE_NAMES.each do |template_name|
       desc "To Create/Update the #{stack_name} stack with the #{template_name} template"
       task :update => "#{template_name}:validate" do
         # create cfn client
-        cloudformation = Aws::CloudFormation::Client.new
+        cloudformation = Aws::CloudFormation::Client.new(
+          access_key_id: ENV['AWS_ACCESS_KEY_ID'],
+          secret_access_key: ENV['AWS_SECRET_ACCESS_KEY'],
+          region: ENV['AWS_REGION']
+        )
         # find stack asked by user
         stack = cloudformation.list_stacks.stack_summaries.find {|stack| stack.stack_name == stack_name}
 

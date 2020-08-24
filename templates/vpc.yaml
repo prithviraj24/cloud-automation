@@ -211,16 +211,16 @@ Outputs:
 #     Value: !Ref publicsubnet2
 #     Export:
 #       Name: !Sub '${AWS::StackName}-publicsubnet2'
-#   privatesubnet1output:
-#     Description: The privatesubnet1 ID
-#     Value: !Ref privatesubnet1
-#     Export:
-#       Name: !Sub '${AWS::StackName}-privatesubnet1'
-#   privatesubnet2output:
-#     Description: The privatesubnet2 ID
-#     Value: !Ref privatesubnet2
-#     Export:
-#       Name: !Sub '${AWS::StackName}-privatesubnet2'
+  PrivateSubnet1CidrBlockOutput:
+    Description: The  Private Subnet 1 ID
+    Value: !Join [ '.', [ !Ref VpcBeginRange, !Ref PrivateSubnet1CidrBlock ] ]
+    Export:
+      Name: !Sub '${AWS::StackName}-privatesubnet1-cidr-block'
+  PrivateSubnet2CidrBlockOutput:
+    Description: The Private Subnet2 ID
+    Value: !Join [ '.', [ !Ref VpcBeginRange, !Ref PrivateSubnet2CidrBlock ] ]
+    Export:
+      Name: !Sub '${AWS::StackName}-privatesubnet2-cidr-block'
 #   dbsubnet1output:
 #     Description: The dbsubnet1 ID
 #     Value: !Ref dbsubnet1
