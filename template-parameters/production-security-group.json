@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "ParentVPCStackName",
+    "ParameterValue": "staging-vpc"
+  },
+  {
+    "ParameterKey": "CompanyName",
+    "ParameterValue": "IranBet"
+  }
+]
