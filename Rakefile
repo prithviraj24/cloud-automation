@@ -63,7 +63,11 @@ TEMPLATE_NAMES.each do |template_name|
   namespace template_name do
     desc "Validate the #{template_name} template"
     task :validate do
-      cloudformation = Aws::CloudFormation::Client.new
+      cloudformation = Aws::CloudFormation::Client.new(
+        access_key_id: ENV['AWS_ACCESS_KEY_ID'],
+        secret_access_key: ENV['AWS_SECRET_ACCESS_KEY'],
+        region: ENV['AWS_REGION']
+      )
       cloudformation.validate_template(template_body: template_body)
     end
   end
