@@ -8,8 +8,8 @@ It gives you a simple and easy to use CLI to update/create Stacks on Cloudformat
 
 ## Prerequisite
 - AWS IAM user with Admin privilege/Cloudformation Admin access or Root user.
-- Configure AWS cli on your local system. [Access keys, Region]
-  - `aws configure` and fill details on prompt.
+- Create .env file in the root project folder
+- Set AWS credentials and region in .env file (similar to .env-sample)
 
 
 ## Setup:
@@ -40,6 +40,5 @@ It gives you a simple and easy to use CLI to update/create Stacks on Cloudformat
 - Template: Stores details of infrastructure you want to create. What resource to create/update (e.g. VPC, EC2, Subnet, RDS, etc)
 - Parameters: Stores configuration that is passed into a template file. (e.g. IP address to use for a VPC etc.)
 - It strictly accepts templates in only yaml format. And parameters in Json format.
-- By default, it will start stack creation/updation on the AWS Region that you've configured using AWS CLI
-- You don't have to specify your AWS Account, it will automatically detect AWS account after you've configured AWS CLI & will perform stack creation/updation only on that account.
+- By default, it will start stack creation/updation on the AWS Region that you've configured in your .env file
 - [Warning]: Make sure to check you've correct AWS account configured in your local machine otherwise it will start creating resources in other AWS account.
