@@ -1,10 +1,14 @@
 [
   {
     "ParameterKey": "ParentVPCStackName",
-    "ParameterValue": "staging-vpc"
+    "ParameterValue": "production-vpc"
   },
   {
-    "ParameterKey": "CompanyName",
+    "ParameterKey": "ProjectName",
     "ParameterValue": "IranBet"
+  },
+  {
+    "ParameterKey": "EnvironmentParameter",
+    "ParameterValue": "production"
   }
 ]

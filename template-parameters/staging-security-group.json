@@ -4,7 +4,11 @@
     "ParameterValue": "staging-vpc"
   },
   {
-    "ParameterKey": "CompanyName",
+    "ParameterKey": "EnvironmentParameter",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "ProjectName",
     "ParameterValue": "IranBet"
   }
 ]

@@ -6,16 +6,21 @@ Parameters:
     Type: String
     AllowedValues: [ "staging-vpc", "production-vpc" ]
     Default: staging-vpc
-  CompanyName:
+  ProjectName:
     Description: Name of Company. To append in name of Resources.
     Type: String
     Default: ''
+  EnvironmentParameter:
+    Description: Current Environment To append in name of Resources.
+    Type: String
+    Default: ''
+    
 Resources:
   WebALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for Web ALB
-      GroupName: !Sub "${CompanyName}-SG-Web-Service-ALB"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-Web-Service-ALB"
       SecurityGroupIngress:
         - IpProtocol: tcp
           ToPort: 80
@@ -31,7 +36,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for Admin ALB
-      GroupName: !Sub "${CompanyName}-SG-Admin-Service-ALB"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-Admin-Service-ALB"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -48,7 +53,7 @@ Resources:
     DependsOn: WebALBSecurityGroup
     Properties:
       GroupDescription: Security Group for Web Service
-      GroupName: !Sub "${CompanyName}-SG-Web-Service"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-Web-Service"
       SecurityGroupIngress:
         - IpProtocol: tcp
           ToPort: 3000
@@ -61,7 +66,7 @@ Resources:
     DependsOn: AdminALBSecurityGroup
     Properties:
       GroupDescription: Security Group for Admin Service
-      GroupName: !Sub "${CompanyName}-SG-Admin-Service"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-Admin-Service"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3000
@@ -73,14 +78,14 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for Sidekiq Service
-      GroupName: !Sub "${CompanyName}-SG-Sidekiq-Service"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-Sidekiq-Service"
       VpcId:
         Fn::ImportValue: !Sub '${ParentVPCStackName}-vpc'
   OpenVPNSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for Admin Service
-      GroupName: !Sub "${CompanyName}-SG-OpenVPN"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-OpenVPN"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 1194
@@ -108,7 +113,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for RDS
-      GroupName: !Sub "${CompanyName}-SG-RDS"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-RDS"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
@@ -132,7 +137,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security Group for MemCached
-      GroupName: !Sub "${CompanyName}-SG-MemCached"
+      GroupName: !Sub "${ProjectName}-${EnvironmentParameter}-SG-MemCached"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 6379
