@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ElastiCache cluster creation with cloudformation
+Parameters:
+  EnvironmentParameter:
+    Description: Select the type of environment to create.
+    Type: String
+    AllowedValues: [ staging, production ]
+    Default: staging
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: Choose which VPC the Applicaion Load Balancer should be deployed to
+  SecurityGroups:
+      Description: Select the Security Group to apply to the Applicaion Load Balancer
+      Type: AWS::EC2::SecurityGroup::Id  
+  ClusterName:
+    Description: Custom name of the cluster. Auto generated if you don't supply your own.
+    Type: String
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+  # ProjectName:
+  #   Description: Enter the name of the for which you want to create the cluster (must be same as the name of VPC Stack)
+  #   Type: String
+  #   AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"  
+  ParentVPCStackName:
+    Description: Name of ParentVPCStack.
+    Type: String
+    AllowedValues: [ "staging-vpc", "production-vpc" ]
+    Default: staging-vpc     
+  CacheNodeType:
+    Description: Cache node instance class, e.g. cache.t2.micro
+    Type: String
+    Default: cache.t2.micro
+    ConstraintDescription: Node instance class not supported
+    AllowedValues:
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
+      - cache.m4.large
+      - cache.m4.xlarge
+      - cache.m4.2xlarge
+      - cache.m4.4xlarge
+      - cache.m4.10xlarge
+      - cache.r4.large
+      - cache.r4.xlarge
+      - cache.r4.2xlarge
+      - cache.r4.4xlarge
+      - cache.r4.8xlarge
+      - cache.r4.16xlarge
+  CacheEngine:
+    Description: The underlying cache engine, either Redis or Memcached
+    Type: String
+    Default: redis
+    ConstraintDescription: Node instance class not supported
+    AllowedValues:
+      - redis
+      - memcached
+  CacheNodeCount:
+    Description: Number of nodes in the cluster. Only used with memcached engine, for redis this value will be set to 1.
+    Type: Number
+    MinValue: 1
+    MaxValue: 15
+    ConstraintDescription: Node count must be between 1 and 15
+    Default: 1
+  AutoMinorVersionUpgrade:
+    Description: Auto minor version update allow or not
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+Conditions:
+  IsRedis: !Equals [ !Ref CacheEngine, redis]
+Resources:
+  # SecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: ElastiCache Security Group
+  #     VpcId:
+  #       Fn::ImportValue: !Sub ${EnvironmentParameter}-vpc
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: !If [ IsRedis, 6379, 11211]
+  #         ToPort: !If [ IsRedis, 6379, 11211]
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "${AWS::StackName}-ElastiCacheSecurityGroup"
+  ElastiCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AutoMinorVersionUpgrade: !Ref AutoMinorVersionUpgrade
+      Engine: !Ref CacheEngine
+      CacheNodeType: !Ref CacheNodeType
+      ClusterName : !Ref ClusterName
+      NumCacheNodes: !If [ IsRedis, 1, !Ref CacheNodeCount]
+      CacheSubnetGroupName: 
+        Fn::ImportValue: !Sub "${ParentVPCStackName}-elasticachesubnetgroup"
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroups
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+Outputs:
+  ElastiCacheStackName:
+    Description: ElastiCache Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCacheName
+  ElastiCacheClusterArn:
+    Description: ElastiCache Cluster Arn
+    Value: !Sub arn:aws:elasticache:${AWS::Region}:${AWS::AccountId}:cluster/${ElastiCacheCluster}
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCacheClusterArn
+  ElastiCacheClusterId:
+    Description: ElastiCache Cluster ID
+    Value: !Ref ElastiCacheCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCacheClusterID
+  ElastiCacheEngine:
+    Description: ElastiCache engine
+    Value: !Ref CacheEngine
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCacheEngine
+  ElastiCacheAddress:
+    Description: ElastiCache endpoint address
+    Value: !If [ IsRedis, !GetAtt ElastiCacheCluster.RedisEndpoint.Address, !GetAtt ElastiCacheCluster.ConfigurationEndpoint.Address]
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCacheAddress
+  ElastiCachePort:
+    Description: ElastiCache port
+    Value: !If [ IsRedis, 6379, 11211]
+    Export:
+      Name: !Sub ${AWS::StackName}-ElastiCachePort

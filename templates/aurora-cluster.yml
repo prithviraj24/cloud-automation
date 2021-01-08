@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: 'Cloudformation Template for RDS' 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - VPC
+          - SecurityGroups
+          - ParentVPCStackName
+      - Label:
+          default: Aurora Configuration
+        Parameters:
+          - AuroraDBClusterName
+          - DBUsername
+          - InitialDatabaseName
+          - DBPassword
+          - MultiAZ
+          - DBEngine
+          - DBEngineVersion
+          - DBAllocatedStorage
+      - Label:
+          default: ECR Configuration
+        Parameters:
+          - ECRBaseURI
+          - GitLabBranchName 
+Parameters:
+  VPC:
+      Type: AWS::EC2::VPC::Id
+      Description: Choose which VPC the Applicaion Load Balancer should be deployed to
+  SecurityGroups:
+      Description: Select the Security Group to apply to the Applicaion Load Balancer
+      Type: AWS::EC2::SecurityGroup::Id
+  ParentVPCStackName:
+    Description: Name of ParentVPCStack.
+    Type: String
+    AllowedValues: [ "staging-vpc", "production-vpc" ]
+    Default: staging-vpc    
+  AuroraDBClusterName:
+    Description: 'Enter the ProjectName must be same as the name of your VPC'
+    ConstraintDescription: 'DBClusterIdentifier'
+    Type: String
+  InitialDatabaseName:
+    Description: 'Enter the Initial Database name'
+    ConstraintDescription: Must contain 1 to 63 letters, numbers, or underscores (no hyphens); and begin a letter or an underscore. Subsequent characters can be letters, underscores, or digits (0-9).
+    Type: String
+    Default: postgres
+  DBUsername:
+    Description: Database username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Default: postgres
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: The database admin account password
+    Type: String
+    MinLength: '1'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]+'
+    ConstraintDescription: must contain only alphanumeric characters.  
+  MultiAZ:
+    Description: Multi-AZ master database
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    ConstraintDescription: must be true or false.      
+  DBMonitoringInSeconds:
+    Description: The interval, in seconds, between points when Enhanced Monitoring metrics are collected for the DB instance.
+    Type: Number
+    Default: 60
+  DaysDBBackupsStored:
+    Description: 'The number of days for which automated backups are retained. Setting this parameter to a positive number enables backups. 
+      Setting this parameter to 0 disables automated backups. '
+    Type: Number
+    Default: 7
+  # DBStorageType:
+  #   Description: 'Specifies the storage type to be associated with the DB instance. Avaiable Types standard | gp2 | io1.'
+  #   Type: String
+  #   AllowedValues:
+  #     - gp2
+  #     - standard
+  #     - io1
+  #   Default: gp2
+  # DBAllocatedStorage:
+  #   Description: The amount of storage, in gigabytes, to be initially allocated for the database instance.
+  #   Type: String 
+  #   Default: '20'
+  # MaximumAllocatedStorage:
+  #   Description: The Maximum amount of storage, in gigabytes, to be initially allocated for the database instance.
+  #   Type: String 
+  #   Default: '100'
+  DataBaseInstanceIdentifier:
+    Description: An identifier for the DB instance. Note that this is different from the DB name.
+    Type: String
+    Default: betshera-staging
+  DBInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t3.medium
+    AllowedValues: [ db.t3.medium, db.t1.micro, db.m1.small, db.m1.medium, db.m1.large, db.m1.xlarge,
+      db.m2.xlarge, db.m2.2xlarge, db.m2.4xlarge, db.m3.medium, db.m3.large, db.m3.xlarge,
+      db.m3.2xlarge, db.m4.large, db.m4.xlarge, db.m4.2xlarge, db.m4.4xlarge, db.m4.10xlarge,
+      db.r3.large, db.r3.xlarge, db.r3.2xlarge, db.r3.4xlarge, db.r3.8xlarge, db.m2.xlarge,
+      db.m2.2xlarge, db.m2.4xlarge, db.cr1.8xlarge, db.t2.micro, db.t2.small, db.t2.medium,
+      db.t2.large]
+  DBEngine:
+    Description: Select the Database Engine
+    Type: String
+    Default: postgres
+    AllowedValues: [Oracle, MySQL, MariaDB, postgres]
+  DBEngineVersion:
+    Description: Select Database Engine Version
+    Type: String
+    Default: 11.6
+    AllowedValues:
+      - 9.6.8
+      - 9.6.9
+      - 9.6.11
+      - 9.6.12
+      - 9.6.16
+      - 10.4
+      - 10.5
+      - 10.6
+      - 10.7
+      - 10.11
+      - 11.4
+      - 11.6 
+Resources: 
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref DBEngineVersion
+      Port: 5432
+      DeletionProtection: true
+      DatabaseName: !Ref InitialDatabaseName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName:
+        Fn::ImportValue: !Sub "${ParentVPCStackName}-dbsubnetgroup"
+      VpcSecurityGroupIds:
+      - !Ref SecurityGroups  
+  AuroraDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      # AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceIdentifier: !Ref DataBaseInstanceIdentifier
+      DBInstanceClass:
+        !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref AuroraDBCluster  
+      Engine: aurora-postgresql
+      # EngineVersion: !Ref DBEngineVersion
+      AutoMinorVersionUpgrade: true
+      DBSubnetGroupName: 
+        Fn::ImportValue: !Sub "${ParentVPCStackName}-dbsubnetgroup"
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+      # StorageType: !Ref DBStorageType
+      # AllocatedStorage: !Ref DBAllocatedStorage
+      # MaxAllocatedStorage: !Ref MaximumAllocatedStorage
+      # VPCSecurityGroups: 
+      #   - !Ref SecurityGroups
+Outputs:
+  RDSEndpoint:
+    Description: RDS instance endpoint
+    Value: !GetAtt AuroraDBInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+  RDSPort:
+    Description: RDS instance Port
+    Value: !GetAtt AuroraDBInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSPort'      

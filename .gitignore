@@ -1,1 +1,6 @@
 .env
+templates/openvpn.pem
+templates/client.ovpn
+templates/betshera-admin.env
+templates/betshera-betting.env
+

@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Container cluster on ECS.
+Parameters:
+  EnvironmentParameter:
+     Description: Select the type of environment to create.
+     Type: String
+     AllowedValues: [ staging, production ]
+     Default: staging
+  ECSClusterName:
+    Description: 'Enter the ECSCluster Name'
+    Type: String
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ECSClusterName
+  # ECSContainerSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #    VpcId:
+  #      Fn::ImportValue: !Sub "${EnvironmentParameter}-vpc-vpc"
+  #    GroupDescription: for ecs containers
+  #    SecurityGroupIngress:
+  #      - SourceSecurityGroupId:
+  #          Fn::ImportValue: !Sub "${EnvironmentParameter}-loadbalancersecuritygroup"
+  #        IpProtocol: -1
+Outputs:
+  ECSClusterName:
+    Value: !Ref ECSCluster
+    Export:
+      Name: 'ECSClusterName'
+  ECSClusterArn:
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: 'ECSClusterArn'    
+  # SecurityGroup:
+  #   Value: !Ref ECSContainerSecurityGroup
+  #   Export:
+  #     Name: !Sub '${EnvironmentParameter}-ecscontainersecuritygroup'

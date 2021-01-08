@@ -187,6 +187,12 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRT
       SubnetId: !Ref PrivateSubnet2
+  ElasticacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      CacheSubnetGroupName: !Join [ '-', [ !Ref AWS::StackName, elasticachesubnetgroup ] ]
+      Description: !Join [ '-', [ !Ref AWS::StackName, elasticachesubnetgroup ] ]
+      SubnetIds: [ !Ref DatabaseSubnet1, !Ref DatabaseSubnet2 ]
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -261,11 +267,16 @@ Outputs:
 #     Value: !Ref privatesubnet2routetable
 #     Export:
 #       Name: !Sub '${AWS::StackName}-privatesubnet2routetable'
-#   dbsubnetgroupoutput:
-#     Description: The RDS subnet group
-#     Value: !Ref dbsubnetgroup
-#     Export:
-#       Name: !Sub '${AWS::StackName}-dbsubnetgroup'
+  dbsubnetgroupoutput:
+    Description: The RDS subnet group
+    Value: !Ref DatabaseSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-dbsubnetgroup'
+  elasticachesubnetgroupoutput:
+    Description: The RDS subnet group
+    Value: !Ref ElasticacheSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-elasticachesubnetgroup'
 #   StackOutputName:
 #     Description: The VPC stack name
 #     Value: !Ref 'AWS::StackName'

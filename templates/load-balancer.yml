@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates Loadbalancer, security groups and CloudWatch Log Group
+Parameters:
+  EnvironmentParameter:
+     Description: Select the type of environment to create.
+     Type: String
+     AllowedValues: [ staging, production ]
+     Default: staging
+  VPC:
+      Type: AWS::EC2::VPC::Id
+      Description: Choose which VPC the Applicaion Load Balancer should be deployed to
+  VPCSubnets:
+      Description: Choose which subnets the Applicaion Load Balancer should be deployed to
+      Type: List<AWS::EC2::Subnet::Id>
+  ParentVPCStackName:
+    Description: Name of ParentVPCStack.
+    Type: String
+    AllowedValues: [ "staging-vpc", "production-vpc" ]
+    Default: staging-vpc       
+  SecurityGroup:
+      Description: Select the Security Group to apply to the Applicaion Load Balancer
+      Type: AWS::EC2::SecurityGroup::Id
+  CWLogGroupName:
+    Description: 'Enter the CloudWatch Log Name'
+    Type: String
+  LoadBalancerName:
+    Description: 'Enter the LoadBalancer Name'
+    Type: String
+  # TargetGroupName:
+  #   Description: 'Enter the LoadBalancer Target group Name'
+  #   Type: String
+Resources:
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref LoadBalancerName
+      Subnets:
+        - !Select [ 0, !Ref VPCSubnets ]
+        - !Select [ 1, !Ref VPCSubnets ]
+        # - Fn::ImportValue: !Sub "${EnvironmentParameter}-publicsubnet1"
+        # - Fn::ImportValue: !Sub "${EnvironmentParameter}-publicsubnet2"
+      SecurityGroups:
+        - !Ref SecurityGroup
+  # LoadBalancerListener:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     LoadBalancerArn: !Ref LoadBalancer
+  #     Protocol: HTTP
+  #     Port: 80
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref DefaultTargetGroup
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for loadbalancer to services on ECS
+      VpcId:
+        Fn::ImportValue: !Sub "${ParentVPCStackName}-vpc"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+  # DefaultTargetGroup:
+  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  #   Properties:
+  #     Name: !Ref TargetGroupName
+  #     VpcId:
+  #       Fn::ImportValue: !Sub "production-vpc-vpc"
+  #     Protocol: 'HTTP'
+  #     Port: '80'
+  #     TargetType: ip
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref CWLogGroupName
+      RetentionInDays: 1
+Outputs:
+  # Listener:
+  #   Description: listener port 80
+  #   Value: !Ref LoadBalancerListener
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Listener'
+  #       #Name: 'Listener'
+  LoadBalancerDNS:
+    Description: Domain name for the loadbalancer
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSName'
+  LoadBalancerArn:
+    Description: ARN for the loadbalancer
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ARN'    
+  LoadBalancerSG:
+    Description: LoadBalancer SecurityGroup
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-loadbalancersecuritygroup'
+  # LoadBalancerTargetGroup:
+  #   Description: LoadBalancer TargetGroup
+  #   Value: !Ref DefaultTargetGroup
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-loadbalancertargetgroup'

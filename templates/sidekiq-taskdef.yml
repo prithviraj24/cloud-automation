@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task Definition Cloudformation
+Parameters:
+  EnvironmentParameter:
+     Description: Select the type of environment to create.
+     Type: String
+     AllowedValues: [ staging, production ]
+     Default: staging
+  TaskDefinitionName:
+    Description: 'Enter the TaskDefinition Name'
+    Type: String
+  ImageURL:
+    Description: 'Enter the ECR ImageURL with :imagetag for_ex- :latest'
+    Type: String
+  EnvironmentFile:
+    Description: 'Enter the ARN of Environment file'
+    Type: String
+  TaskCpu:
+    Description: 'Enter the CPU Power'
+    Type: String
+    AllowedValues: [ 256, 512, 1024, 2048, 4096]
+  TaskMemory:
+    Description: 'Enter the Memory Size'
+    Type: String
+    AllowedValues: [ 0.5GB, 1GB, 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB, 9GB, 10GB, 11GB, 12GB, 13GB, 14GB, 15GB,
+       16GB, 17GB, 18GB, 19GB, 20GB, 21GB, 22GB, 23GB, 24GB, 25GB, 26GB, 27GB, 28GB, 29GB, 30GB ]
+  # RunCommand:
+  #   Description: 'Enter the command to run for ex. $ bundle exec sidekiq'
+  #   Type: String
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref TaskDefinitionName
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+       # - EC2
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      # Command:
+      #   - !Ref RunCommand
+      ExecutionRoleArn: !ImportValue ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Ref TaskDefinitionName
+          Image: !Ref ImageURL
+          Command:
+            ["bundle","exec","sidekiq"]
+          # HealthCheck:
+          #   Command: [ "CMD-SHELL", "curl -f http://localhost:3000/health_check || exit 1" ]
+          #   # Interval: !Ref HealthCheckInterval
+          #   # Timeout: !Ref HealthCheckTimeout
+          #   # Retries: !Ref HealthCheckRetries
+          #   Interval: "30"
+          #   Retries: "3"
+          #   Timeout: "5"
+          EnvironmentFiles:
+            - Type: s3
+              Value: !Ref EnvironmentFile
+          # Send logs to CloudWatch Logs
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Join [ '/', [ '/ecs' , !Ref TaskDefinitionName ] ]
+              awslogs-stream-prefix: ecs
+      TaskRoleArn: !ImportValue ECSTaskRole
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+    #  KmsKeyId: String
+      LogGroupName: !Join [ '/', [ '/ecs' , !Ref TaskDefinitionName ] ]
+      RetentionInDays: 14
+Outputs:
+  TaskDefinitionName:
+    Description: ECS Task Execution Role
+    Value: !Ref TaskDefinitionName
+    Export:
+      Name: !Sub '${AWS::StackName}-taskdefinition'
+  ContainerDefinitionName:
+    Description: ECS Container Definition Name
+    Value: !Ref 'TaskDefinitionName'
+    Export:
+      Name: !Sub '${AWS::StackName}-ContainerName'
+  LogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Join [ '/', [ '/ecs' , !Ref TaskDefinitionName ] ]
+    Export:
+      Name: !Sub '${AWS::StackName}-CWLogGroup'

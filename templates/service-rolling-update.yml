@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task Definition and ECS Cloudformation
+Metadata:
+  QuickStartDocumentation:
+    EntrypointName: "Launch Quick Start"
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - EnvironmentParameter
+          - VPC
+          - VPCSubnets
+          - SecurityGroup
+      - Label:
+          default: ECS Configuration
+        Parameters:
+          - TaskDefinitionName
+          - ImageURL
+          - EnvironmentFile
+          - TaskMemory
+          - TaskCpu
+Parameters:
+  EnvironmentParameter:
+     Description: Select the type of environment to create.
+     Type: String
+     AllowedValues: [ staging, production ]
+     Default: staging
+  VPC:
+      Type: AWS::EC2::VPC::Id
+      Description: Choose which VPC the Applicaion Load Balancer should be deployed to
+  VPCSubnets:
+      Description: Choose which subnets in which service should be deployed to
+      Type: List<AWS::EC2::Subnet::Id>
+  SecurityGroup:
+      Description: Select the Security Group to apply to the service
+      Type: List<AWS::EC2::SecurityGroup::Id>
+  # TaskDefinitionName:
+  #   Description: 'Enter the TaskDefinition Name'
+  #   Type: String
+  # EnvironmentFile:
+  #   Description: 'Enter the ARN of Environment file'
+  #   Type: String  
+  # ImageURL:
+  #   Description: 'Enter the ECR ImageURL with :imagetag for_ex- :latest'
+  #   Type: String
+  ECSServiceName:
+    Description: 'Enter the Service Name'
+    Type: String
+  SourceTaskDefinitionName:
+    Description: 'Enter the Source Task Definition for which the service to be created'
+    Type: String      
+  # TaskCpu:
+  #   Description: 'Enter the CPU Power'
+  #   Type: String
+  #   AllowedValues: [ 256, 512, 1024, 2048, 4096]
+  # TaskMemory:
+  #   Description: 'Enter the Memory Size'
+  #   Type: String
+  #   AllowedValues: [ 0.5GB, 1GB, 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB, 9GB, 10GB, 11GB, 12GB, 13GB, 14GB, 15GB,
+  #      16GB, 17GB, 18GB, 19GB, 20GB, 21GB, 22GB, 23GB, 24GB, 25GB, 26GB, 27GB, 28GB, 29GB, 30GB ]  
+Resources:
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ECSServiceName
+      TaskDefinition: Fn::ImportValue: !Sub "${SourceTaskDefinitionName}-taskdefinition"
+      Cluster: !ImportValue 'ECSClusterArn'
+      LaunchType: FARGATE
+      DesiredCount: 1
+      PlatformVersion: '1.4.0'
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 70
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Select [ 0, !Ref VPCSubnets ]
+            - !Select [ 1, !Ref VPCSubnets ]
+          SecurityGroups:
+            # - Fn::ImportValue: !Sub "${EnvironmentParameter}-ecscontainersecuritygroup"
+            - !Select [ 0, !Ref SecurityGroup ]
+            # - !Select [ 1, !Ref SecurityGroup ]
+      # LoadBalancers:
+      #   - ContainerName: !ImportValue containerdefinitioname
+      #     ContainerPort: 80
+      #     TargetGroupArn: !Ref TargetGroup
+

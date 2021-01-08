@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM role that tasks can use to make API requests to authorized AWS services
+Resources:
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskRolePolicy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action: s3:*
+              Resource: '*'
+Outputs:
+  ECSTaskExecutionRole:
+    Description: ECS Task Role For ECS Service
+    Value: !GetAtt 'ECSTaskRole.Arn'
+    Export:
+      Name: 'ECSTaskRole'
