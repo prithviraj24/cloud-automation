@@ -1,0 +1,462 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create a Docker CI/CD pipeline with CodePipeline, CodeBuild and ECR
+Metadata:
+  QuickStartDocumentation:
+    EntrypointName: "CloudFormation of CodePipeline"
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: CodePipeline Configuration
+        Parameters:
+          - Projectname
+          - EnvironmentParameter
+      - Label:
+          default: Web Build Project
+        Parameters:
+          - ECRRegion
+          # - ECRRepositoryURL
+          - ImgDefEcsStd
+          - TaskDefFamilyNameWeb
+      - Label:
+          default: DB Migration Build Project
+        Parameters:
+          - DBHost 
+          - DBUsername
+          - DBName
+          - DBPassword
+      - Label:
+          default: VPC Config for DB-migration project.
+        Parameters:
+          - VPC 
+          - VPCSubnets
+          - SecurityGroup
+Parameters:
+  Projectname:
+    Description: Enter the project name to append as pipeline name.
+    Type: String
+  ECRRepositoryName:
+    Description: Enter the ECR repository name.
+    Type: String
+    Default: mytestrepository
+  EnvironmentParameter:
+    Description: Select the type of environment to create.
+    Type: String
+    AllowedValues: [ staging, production ]
+    Default: staging
+  # ECRRegion:
+  #   Description: Enter the region in which ECR repository is created.
+  #   Default: us-east-1
+  #   Type: String
+  # ECRRepositoryURL:
+  #   Description: Enter the URL of ECR repository to as codepipeline source.
+  #   Type: String 
+  #   Default: ECRRepositoryName
+  ImgDefEcsStd:
+    Description: "Enter the ECS sidekiq name for example: [ProjectName-production-web-sidekiq]."
+    Type: String
+    Default: ImgDefEcsStd
+  TaskDefFamilyNameWeb:
+    Description: "Enter the Task Definition name for example: ProjectName-production-web."
+    Type: String 
+    Default: TaskDefFamilyNameWeb
+  DBHost:
+    Description: Enter the DB Host Endpoint Url for DB Migration Build Project.
+    Default: DBEnpointURl
+    Type: String 
+  DBUsername:
+    Description: Enter the DB UserName for DB Migration Build Project.
+    Type: String
+    Default: postgres
+  DBPassword:
+    Description: Enter the DB Password for above Username.
+    Type: String
+    Default: DBPassword 
+  DBName:
+    Description: Enter the DB Name to connect for DB Migration Build Project.
+    Type: String
+    Default: DBName
+  # VPC:
+  #   Type: AWS::EC2::VPC::Id
+  #   Description: Choose which VPC the Applicaion Load Balancer should be deployed to
+  # VPCSubnets:
+  #   Description: Choose which subnets in which service should be deployed to
+  #   Type: List<AWS::EC2::Subnet::Id>
+  # SecurityGroup:
+  #   Description: Select the Security Group to apply to the service
+  #   Type: List<AWS::EC2::SecurityGroup::Id>  
+Resources:
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  AWSCodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref 'ArtifactStoreBucket'
+        Type: S3
+      Name: !Ref 'Projectname'
+      RoleArn: !GetAtt [CodePipelineRole, Arn]
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: ECR
+                Version: '1'
+              OutputArtifacts:
+                - Name: SourceArtifact
+              Configuration:
+                ImageTag: latest
+                RepositoryName: !Ref ECRContainerRepository
+              RunOrder: '1'
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              OutputArtifacts:
+                - Name: BuildArtifact  
+              Configuration:
+                ProjectName: !Ref WebBuildProject
+              InputArtifacts:
+                - Name: SourceArtifact
+              RunOrder: '1'
+        - Name: Deploy
+          Actions:
+            - Name: db-migration
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildDBMigrationProject
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: '1'     
+  CodeBuildDBMigrationProject:
+    # DependsOn: AWSCodePipeline
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${Projectname}-db-migration'
+      # Name: db-migration
+      Artifacts:
+        Type: CODEPIPELINE
+      # VpcConfig:
+      #   VpcId: !Ref VPC
+      #   Subnets: [!Ref VPCSubnets]
+      #   SecurityGroupIds: [!Ref SecurityGroup] 
+      Environment:
+        # Image: aws/codebuild/standard:4.0
+        Image:  !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRContainerRepository}:latest
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: DB_HOST
+            Value: !Ref DBHost
+          - Name: DB_USERNAME
+            Type: PLAINTEXT
+            Value: !Ref DBUsername
+          - Name: DB_PASSWORD
+            Type: PLAINTEXT
+            Value: !Ref DBPassword
+          - Name: DB_NAME
+            Type: PLAINTEXT
+            Value: !Ref DBName
+      ServiceRole:
+        Fn::GetAtt:
+        - CodeBuildRole
+        - Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+            version: 0.2
+            phases:          
+              build:
+                commands:
+                  - cd "${APP_HOME}"
+                  - rails db:migrate             
+  WebBuildProject:
+    # DependsOn: AWSCodePipeline
+    Type: AWS::CodeBuild::Project
+    Properties:
+      # Name: web-builddb-migration
+      Name: !Sub '${Projectname}-${EnvironmentParameter}-build-image'
+      Artifacts:
+        Type: CODEPIPELINE
+      # Source:
+      #   Type: CODEPIPELINE
+      Environment:
+        Image: aws/codebuild/standard:4.0
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: ECR_REPOSITORY_URI
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRContainerRepository}
+          - Name: ECR_REGION
+            Type: PLAINTEXT
+            Value: !Ref "AWS::Region"
+          - Name: IMG_DEF_ECS_STD
+            Type: PLAINTEXT
+            Value: !Ref ImgDefEcsStd
+          - Name: TASK_DEF_FAMILY_NAME_WEB
+            Type: PLAINTEXT
+            Value: !Ref TaskDefFamilyNameWeb
+      ServiceRole:
+        Fn::GetAtt:
+        - CodeBuildRole
+        - Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+            version: 0.2
+            phases:
+              install:
+                runtime-versions:
+                  android: 28
+                  ruby: "2.6"
+              pre_build:
+                commands:
+                  - $(aws ecr get-login --no-include-email --region "${ECR_REGION}")
+              build:
+                commands:
+                  - ECR_REPOSITORY_URL=$(cat imageDetail.json | python -c "import sys, json; print(json.load(sys.stdin)['ImageURI'])")
+                  - mkdir -p 'imagedefinitions/'
+                  - |
+                      echo "${IMG_DEF_ECS_STD}" \
+                        | jq -r '.[]' \
+                        | while read -r image_user; do
+                            (
+                                echo "${image_user}"
+                                echo "${ECR_REPOSITORY_URL}"
+                            ) \
+                                | jq -Rs 'split("\n") | [{"name": .[0], "imageUri": .[1]}]' \
+                                    > "imagedefinitions/${image_user}.json"
+                         done
+                  - mkdir -p 'web_deploy/'
+                  - |
+                      echo "${ECR_REPOSITORY_URL}" \
+                         | jq -R '{"ImageURI": (.)}' \
+                            > "web_deploy/imageDetail.json"    
+                  - |
+                         aws \
+                           --region $AWS_DEFAULT_REGION \
+                               ecs describe-task-definition \
+                                   --task-definition "${TASK_DEF_FAMILY_NAME_WEB}" \
+                                       | jq '
+                                           .taskDefinition
+                                               | .taskDefinitionArn = "<TASK_DEFINITION>"
+                                               | .containerDefinitions[0].image = "<IMAGE_ARN>"
+                                       ' > web_deploy/taskdef.json
+                  - |
+                      cat << APPSPEC > web_deploy/appspec.yaml
+                      version: 1
+                      Resources:
+                        - TargetService:
+                            Type: AWS::ECS::Service
+                            Properties:
+                              TaskDefinition: <TASK_DEFINITION>
+                              LoadBalancerInfo:
+                                ContainerName: "palacebet-production-web"
+                                ContainerPort: 3000
+                              PlatformVersion: 1.4.0
+                      APPSPEC
+            artifacts:
+              files:
+                - "imagedefinitions/*"
+                - "web_deploy/*"
+              discard-paths: yes
+
+  ECRContainerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "remove images more than 5",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 5
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+      RepositoryName: !Ref ECRRepositoryName
+      RepositoryPolicyText: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Sid: AllowRepoAccess
+            Effect: Allow
+            Principal: 
+              AWS: "*"              
+            Action: ecr:*
+  CFNRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [cloudformation.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: CloudFormationRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - 'ec2:*'
+                Effect: Allow
+                Resource: '*'
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      RoleName: !Sub 'AWSCodePipelineServiceRole-${AWS::Region}-${Projectname}'
+      Policies:
+        - PolicyName: !Sub 'AWSCodePipelinePolicy-${AWS::Region}-${Projectname}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 's3:*'
+                - 'cloudformation:CreateStack'
+                - 'cloudformation:DescribeStacks'
+                - 'cloudformation:DeleteStack'
+                - 'cloudformation:UpdateStack'
+                - 'cloudformation:CreateChangeSet'
+                - 'cloudformation:ExecuteChangeSet'
+                - 'cloudformation:DeleteChangeSet'
+                - 'cloudformation:DescribeChangeSet'
+                - 'cloudformation:SetStackPolicy'
+                - 'iam:PassRole'
+                - 'sns:Publish'
+                - 'codebuild:*'
+                - codecommit:CancelUploadArchive
+                - codecommit:GetBranch
+                - codecommit:GetCommit
+                - codecommit:GetRepository
+                - codecommit:GetUploadArchiveStatus
+                - codecommit:UploadArchive
+                - codedeploy:CreateDeployment
+                - codedeploy:GetApplication
+                - codedeploy:GetApplicationRevision
+                - codedeploy:GetDeployment
+                - codedeploy:GetDeploymentConfig
+                - codedeploy:RegisterApplicationRevision
+                - codestar-connections:UseConnection
+                - elasticbeanstalk:*
+                - ec2:*
+                - elasticloadbalancing:*
+                - autoscaling:*
+                - cloudwatch:*
+                - s3:*
+                - sns:*
+                - cloudformation:*
+                - rds:*
+                - sqs:*
+                - ecs:*
+                - lambda:InvokeFunction
+                - lambda:ListFunctions
+                - opsworks:CreateDeployment
+                - opsworks:DescribeApps
+                - opsworks:DescribeCommands
+                - opsworks:DescribeDeployments
+                - opsworks:DescribeInstances
+                - opsworks:DescribeStacks
+                - opsworks:UpdateApp
+                - opsworks:UpdateStack
+                - cloudformation:CreateStack
+                - cloudformation:DeleteStack
+                - cloudformation:DescribeStacks
+                - cloudformation:UpdateStack
+                - cloudformation:CreateChangeSet
+                - cloudformation:DeleteChangeSet
+                - cloudformation:DescribeChangeSet
+                - cloudformation:ExecuteChangeSet
+                - cloudformation:SetStackPolicy
+                - cloudformation:ValidateTemplate
+                - codebuild:BatchGetBuilds
+                - codebuild:StartBuild
+                - codebuild:BatchGetBuildBatches
+                - codebuild:StartBuildBatch
+                - devicefarm:ListProjects
+                - devicefarm:ListDevicePools
+                - devicefarm:GetRun
+                - devicefarm:GetUpload
+                - devicefarm:CreateUpload
+                - devicefarm:ScheduleRun
+                - servicecatalog:ListProvisioningArtifacts
+                - servicecatalog:CreateProvisioningArtifact
+                - servicecatalog:DescribeProvisioningArtifact
+                - servicecatalog:DeleteProvisioningArtifact
+                - servicecatalog:UpdateProduct
+                - cloudformation:ValidateTemplate
+                - ecr:*
+                - states:DescribeExecution
+                - states:DescribeStateMachine
+                - states:StartExecution
+                - appconfig:StartDeployment
+                - appconfig:StopDeployment
+                - appconfig:GetDeployment
+                Effect: Allow
+                Resource: '*'
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'AWSCodeBuildServiceRole-${AWS::Region}-${Projectname}'
+      Policies:
+        - PolicyName: !Sub 'AWSCodeBuildBasePolicy-${AWS::Region}-${Projectname}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 's3:*'
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - codebuild:CreateReportGroup
+                - codebuild:CreateReport
+                - codebuild:UpdateReport
+                - codebuild:BatchPutTestCases
+                - codebuild:BatchPutCodeCoverages
+                Effect: Allow
+                Resource: '*'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+        - arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess
+        - arn:aws:iam::aws:policy/AmazonVPCFullAccess
+         

@@ -25,10 +25,8 @@ Resources:
                 # ECS tasks to upload logs to CloudWatch
                 - 'logs:CreateLogStream'
                 - 'logs:PutLogEvents'
+                -  's3:*'
               Resource: '*'
-            - Effect: Allow
-              Action: s3:*
-              Resource: "*"
               
 Outputs:
   ECSTaskExecutionRole:

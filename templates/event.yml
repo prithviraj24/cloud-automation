@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task Definition and ECS Cloudformation
+Resources:
+  EventRule: 
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Ref 'AWS::StackName'
+      RoleArn: !GetAtt CloudWatchEventRole.Arn
+      Description: "EventRule"
+      EventPattern: 
+        source:
+          - aws.ecr
+        detail-type:
+          - ECR Image Action
+        detail:
+          action-type:
+            - PUSH
+          image-tag:
+            - latest
+          repository-name:
+            - betdefi-production-backend
+          result:
+            - SUCCESS
+      State: "ENABLED"
+      Targets: 
+      - 
+        Arn: 
+          Fn::GetAtt: 
+            - "LambdaFunction"
+            - "Arn"
+        Id: "TargetFunctionV1"
+  CloudWatchEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [events.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AWSCWEventsInvokePipeline
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action: "codepipeline:StartPipelineExecution"
+              Resource: "*"

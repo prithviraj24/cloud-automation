@@ -47,7 +47,7 @@ Parameters:
   ECSServiceName:
     Description: 'Enter the Service Name'
     Type: String
-  SourceTaskDefinitionName:
+  SourceTaskDefinitionStackName:
     Description: 'Enter the Source Task Definition for which the service to be created'
     Type: String      
   # TaskCpu:
@@ -64,7 +64,11 @@ Resources:
     Type: AWS::ECS::Service
     Properties:
       ServiceName: !Ref ECSServiceName
-      TaskDefinition: Fn::ImportValue: !Sub "${SourceTaskDefinitionName}-taskdefinition"
+      TaskDefinition: 
+        Fn::ImportValue:
+          !Sub "${SourceTaskDefinitionStackName}-taskdefinition"
+      # TaskDefinition: !ImportValue betshera-production-admin-sidekiq-taskdefinition-taskdefinition
+        # - Fn::ImportValue: "${SourceTaskDefinitionStackName}-taskdefinition"        
       Cluster: !ImportValue 'ECSClusterArn'
       LaunchType: FARGATE
       DesiredCount: 1

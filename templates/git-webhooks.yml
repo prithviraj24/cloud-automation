@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: API Gateway, Lambda function with CodeBuild for webhook configuration.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: API Gateway Configuration
+        Parameters:
+          - ApiGatewayName
+          - ApiGatewayStageName
+          - ApiGatewayHTTPMethod
+      - Label:
+          default: SSH Configuration
+        Parameters:
+          - SSHKeyFilePath
+          - SSHConfigFilePath
+      - Label:
+          default: ECR Configuration
+        Parameters:
+          - ECRBaseURI
+          - GitLabBranchName      
+Parameters:
+  ApiGatewayName:
+    Type: String
+    Default: gitpull-webhook-api
+  ApiGatewayStageName:
+    Type: String
+    AllowedPattern: "[a-z0-9]+"
+    Default: gitpull
+  ApiGatewayHTTPMethod:
+    Type: String
+    Default: POST
+  SSHKeyFilePath:
+    Description: SSH Key file path on S3 bucket
+    Type: String
+    Default: ssh_key_file_path_on_s3
+  SSHConfigFilePath:
+    Description: SSH Config file path on S3 bucket
+    Type: String
+    Default: ssh_config_file_path_on_s3
+  ECRBaseURI:
+    Description: ECR repository url
+    Type: String
+  GitLabBranchName:
+    Description: Branch Name to configure with environment e.g. Master,Production, Development, Staging 
+    Type: String    
+Resources:
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: API Gateway's Rest-API to call lambda function
+      # EndpointConfiguration:
+      #   Types:
+      #     - REGIONAL
+      Name: !Ref ApiGatewayName
+  ApiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: !Ref ApiGatewayHTTPMethod
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt LambdaFunction.Arn
+      ResourceId: !GetAtt ApiGateway.RootResourceId
+      RestApiId: !Ref ApiGateway
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayRootMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref ApiGatewayStageName
+  GitPullRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: git2cp-gitpull
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codebuild:*
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:GetRepository
+                  - codecommit:ListBranches
+                  - codecommit:ListRepositories
+                  - cloudwatch:GetMetricStatistics
+                  - ec2:DescribeVpcs
+                Resource: '*'
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      # Handler: index.handler
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt 'GitPullRole.Arn'
+      Runtime: python3.8
+      Timeout: 900
+      Environment:
+        Variables:
+          GitPullCodeBuild: !Ref 'GitPullCodeBuild'
+          Config_File_Path: !Ref SSHConfigFilePath
+          SSH_Key_Path: !Ref SSHKeyFilePath
+          Branch_Name: !Ref GitLabBranchName
+          ECR_BASE_URI: !Ref ECRBaseURI
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import json
+
+          #Global Variables
+          Commit_ID = "Commit_ID"
+          Commit_Message = "Commit_Message"
+          FullName = "Developed By DevOps Team"
+          UserName = "Git Username"
+          pname = os.environ.get('GitPullCodeBuild')
+          ECR_BASE_URI = os.environ.get('ECR_BASE_URI')
+          Branch_Name = os.environ.get('Branch_Name')
+          Config_File = os.environ.get('Config_File_Path')
+          Key = os.environ.get('SSH_Key_Path')
+
+          def lambda_handler(event, context):
+              print(event)
+              body = json.loads(event['body'])
+              # body = event['body-json']
+              # Variables Definition's
+              GitUrl = body ['project']['git_ssh_url']
+              Repository_Name = body ['repository']['name']
+              Gitlab_Branch_Name = body ['ref'].replace('refs/heads/', '').replace('refs/tags/', 'tags/')
+              Commit_Details = body ['commits']
+              global UserName, FullName
+              FullName = body['user_name']
+              UserName = body['user_username']
+
+              for res in body ['commits']:
+                    global Commit_ID, Commit_Message
+                    Commit_ID = res.get('id')
+                    Commit_Message = res.get('message')
+
+              print(Repository_Name, '->', Gitlab_Branch_Name, '->', Commit_Message, '->', Commit_ID, '->', FullName, '->', UserName)
+  
+              if Branch_Name == Gitlab_Branch_Name:
+                 codebuild_client = boto3.client('codebuild')
+                 new_build = codebuild_client.start_build(projectName=pname, environmentVariablesOverride=[
+                                                  {
+                                                   'name': 'GitUrl',
+                                                   'value': GitUrl,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Branch_Name',
+                                                   'value': Branch_Name,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Full_Name',
+                                                   'value': FullName,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Commit_SHA',
+                                                   'value': Commit_ID,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Commit_Message',
+                                                   'value': Commit_Message,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Key_Path',
+                                                   'value': Key,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'Config_Path',
+                                                   'value': Config_File,
+                                                   'type': 'PLAINTEXT'
+                                                  },
+                                                  {
+                                                   'name': 'ECR_BASE_URI',
+                                                   'value': ECR_BASE_URI,
+                                                   'type': 'PLAINTEXT'
+                                                  }
+
+                                               ])
+                 return {
+                          'statusCode': 200,
+                          'body': json.dumps(pname +' Codebuild Execution is Started...')
+                         }
+              else:
+                print (Gitlab_Branch_Name +" Branch is not configured with webhooks... ")
+                return {
+                         'statusCode': 200,
+                         'body': json.dumps(Gitlab_Branch_Name +' Branch is not configured with webhooks...')
+                       }
+          print('Execution Completed')
+
+  LambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/${ApiGatewayStageName}/${ApiGatewayHTTPMethod}/
+  CodeBuildServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: "Allow"
+            Principal:
+                Service: "codebuild.amazonaws.com"
+            Action:
+                - "sts:AssumeRole"
+        Path: "/"
+        Tags:
+          -
+              Key: 'tagging-policy'
+              Value: !Join ['-', ["test", "ok"]]
+  CodeBuildBasePolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+        Description: Policy with base permissions for CodeBuild
+        Path: /
+        Roles:
+          - !Ref CodeBuildServiceRole
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: "Allow"
+            Action:
+                - "logs:CreateLogGroup"
+                - "logs:PutLogEvents"
+                - "logs:CreateLogStream"
+            Resource:
+                - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+          - Effect: "Allow"
+            Action:
+                - "s3:GetObject"
+                - "s3:GetObjectVersion"
+                - "s3:GetBucketAcl"
+                - "s3:GetBucketLocation"
+                - "s3:*"
+            Resource: '*'
+  GitPullCodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Name: !Ref 'AWS::StackName'  
+      Environment:
+        Image: aws/codebuild/standard:4.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        ComputeType: BUILD_GENERAL1_SMALL
+      QueuedTimeoutInMinutes: 60
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:
+        BuildSpec: |
+            version: 0.2
+            phases:
+              install:
+                runtime-versions:
+                  ruby: "2.6"
+              build:
+                commands:
+                  - echo "===============Starting-Deployment==============="
+                  - echo "Getting the SSH Private Key"
+                  - pwd
+                # - aws s3 get-object --bucket ezugi-ssh-key --key enc_key
+                  - aws s3 cp $Key_Path enc_key
+                  - aws s3 cp $Config_Path config
+                  - ls
+                # - cat enc_key
+                  - echo "${Name}"
+                  - echo "${GitUrl}"
+                # - mkdir ~/.ssh
+                  - echo "Adding SSH Key"
+                  - mv ./enc_key ~/.ssh/id_rsa
+                # - echo "$ssh_key" > id_rsa
+                # - echo "ID_RSA is created"
+                # - mv ./id_rsa ~/.ssh/id_rsa
+                  - echo "Setting SSH config profile"
+                  - mv ./config ~/.ssh/config
+                # - |
+                    # cat > ~/.ssh/config <<EOF
+                    #     Host *
+                    #       AddKeysToAgent yes
+                    #       StrictHostKeyChecking no
+                    #       IdentityFile ~/.ssh/id_rsa
+                    #     EOF
+                  - chmod 600 ~/.ssh/id_rsa
+                  - echo "Cloning the repository $GitUrl"
+                  - git clone --single-branch --branch $Branch_Name $GitUrl
+                  - remote_repo=$(ls)
+                  - echo "$remote_repo"
+                  - project_dir=$(ls -d "$remote_repo")
+                  - echo "project_dir"
+                  - cd "$project_dir"
+                  - ls
+                  - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+                  - docker build . -t $ECR_BASE_URI:latest -t $ECR_BASE_URI:$Commit_SHA
+                  - docker push $ECR_BASE_URI:latest
+                  - docker push $ECR_BASE_URI:$Commit_SHA
+                  # - docker build . -t $Commit_SHA:latest -t $ECR_BASE_URI:$Commit_SHA
+                  - echo "===============Deployment-Succeded==============="
+
+        Type: NO_SOURCE
+      TimeoutInMinutes: 14
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/git-webhook-apigw/${AWS::StackName}
+      RetentionInDays: 14
+Outputs:
+  ApiGatewayInvokeURL:
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStageName}
+    Description: API Gatway Invocation Endpoint configure this endpoint with your git webhook
+    Export:
+      Name: !Sub '${AWS::StackName}-Api-Gateway-Endpoint'
+  LambdaArn:
+    Value: !GetAtt LambdaFunction.Arn
+    Description: ARN of Gitpull Lambda function
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
